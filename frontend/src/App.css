@@ -1,10 +1,4 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
+/* Remove conflicting root styles since we're using inline styles for responsiveness */
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -39,4 +33,58 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* Mobile-specific utilities */
+@media (max-width: 768px) {
+  .logo {
+    height: 4em;
+    padding: 1em;
+  }
+
+  .card {
+    padding: 1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo {
+    height: 3em;
+    padding: 0.5em;
+  }
+
+  .card {
+    padding: 0.75em;
+  }
+}
+
+/* Utility classes for mobile responsiveness */
+.mobile-hidden {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-hidden {
+    display: none;
+  }
+
+  .mobile-only {
+    display: block;
+  }
+}
+
+/* Ensure plots and visualizations don't overflow */
+.plot-container {
+  width: 100%;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .plot-container {
+    margin: 0 -0.5rem;
+  }
 }
