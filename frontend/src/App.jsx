@@ -1,35 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useState } from "react";
+import Plot from "react-plotly.js";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [points, setPoints] = useState([]);
+  const [plotData, setPlotData] = useState(null);
+
+  const handleClick = (e) => {
+    const rect = e.target.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 10 - 5;
+    const y = ((e.clientY - rect.top) / rect.height) * 10 - 5;
+    const value = parseFloat(prompt("Enter value for point:", "1.0") || "1.0");
+    setPoints([...points, { x, y, value }]);
+  };
+
+  const handlePredict = async () => {
+    const response = await fetch("http://127.0.0.1:8000/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ points }),
+    });
+    const data = await response.json();
+    setPlotData(data);
+  };
 
   return (
-    <>
+    <div style={{ padding: "1rem" }}>
+      <h1>Gaussian Process Spatial Interpolator</h1>
+      <button onClick={handlePredict}>Predict</button>
+      <div
+        style={{
+          width: "500px",
+          height: "500px",
+          border: "1px solid black",
+          marginTop: "1rem",
+        }}
+        onClick={handleClick}
+      >
+        Click to add points
+      </div>
+      {plotData && (
+        <Plot
+          data={[
+            {
+              x: plotData.x_grid,
+              y: plotData.y_grid,
+              z: plotData.predictions,
+              type: "surface",
+              contours: { z: { show: true, usecolormap: true } },
+            },
+          ]}
+          layout={{ width: 700, height: 700, title: "GP Predictions" }}
+        />
+      )}
       <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        <h3>Points:</h3>
+        <ul>
+          {points.map((p, i) => (
+            <li key={i}>
+              ({p.x.toFixed(2)}, {p.y.toFixed(2)}) = {p.value}
+            </li>
+          ))}
+        </ul>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
