@@ -1,6 +1,9 @@
 import csv
 import json
 import logging
+import math
+from collections import Counter
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -174,3 +177,78 @@ def load_json_config(file_path: str) -> dict[str, Any]:
 
 # Initialize global config
 config = AppConfig()
+
+
+def calculate_character_frequency(text: str) -> dict[str, int]:
+    """
+    Calculate the frequency of each character in the text.
+
+    Args:
+        text: Input text to analyze
+
+    Returns:
+        Dictionary mapping characters to their frequency counts
+    """
+    return dict(Counter(text))
+
+
+def calculate_shannon_entropy(text: str) -> float:
+    """
+    Calculate Shannon entropy of text using log base 2.
+
+    Args:
+        text: Input text to analyze
+
+    Returns:
+        Shannon entropy in bits
+
+    Raises:
+        ValueError: If text is empty
+    """
+    if not text:
+        raise ValueError("Text cannot be empty")
+
+    # Calculate character frequencies
+    char_counts = Counter(text)
+    text_length = len(text)
+
+    # Calculate entropy: -sum(p_i * log2(p_i))
+    entropy = 0.0
+    for count in char_counts.values():
+        probability = count / text_length
+        if probability > 0:  # Avoid log(0)
+            entropy -= probability * math.log2(probability)
+
+    return entropy
+
+
+def analyze_text_entropy(text: str) -> dict[str, Any]:
+    """
+    Perform complete text entropy analysis.
+
+    Args:
+        text: Input text to analyze
+
+    Returns:
+        Dictionary containing entropy analysis results
+
+    Raises:
+        ValueError: If text is empty
+    """
+    if not text:
+        raise ValueError("Text cannot be empty")
+
+    # Calculate metrics
+    entropy = calculate_shannon_entropy(text)
+    char_frequency = calculate_character_frequency(text)
+    text_length = len(text)
+    unique_chars = len(char_frequency)
+
+    return {
+        "text": text,
+        "entropy": round(entropy, 4),  # Round to 4 decimal places
+        "character_frequency": char_frequency,
+        "text_length": text_length,
+        "unique_characters": unique_chars,
+        "analysis_timestamp": datetime.utcnow().isoformat() + "Z",
+    }

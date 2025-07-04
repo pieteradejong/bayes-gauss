@@ -2,11 +2,13 @@
 
 
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF
+
+from .library import analyze_text_entropy
 
 app = FastAPI()
 
@@ -46,6 +48,19 @@ class PredictResponse(BaseModel):
     y_grid: list[float]
     predictions: list[list[float]]
     uncertainty: list[list[float]]
+
+
+class EntropyRequest(BaseModel):
+    text: str
+
+
+class EntropyResponse(BaseModel):
+    text: str
+    entropy: float
+    character_frequency: dict[str, int]
+    text_length: int
+    unique_characters: int
+    analysis_timestamp: str
 
 
 # 🔮 Prediction Endpoint
@@ -91,3 +106,34 @@ def predict(request: PredictRequest):
         predictions=y_pred.reshape(grid_size, grid_size).tolist(),
         uncertainty=y_std.reshape(grid_size, grid_size).tolist(),
     )
+
+
+# 📊 Text Entropy Endpoint
+@app.post("/text/entropy", response_model=EntropyResponse)
+def calculate_text_entropy(request: EntropyRequest):
+    """
+    Calculate Shannon entropy and character frequency analysis for input text.
+    """
+    try:
+        # Validate input
+        if not request.text or not request.text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Text cannot be empty or contain only whitespace",
+            )
+
+        # Check for reasonable text length (prevent abuse)
+        if len(request.text) > 10000:
+            raise HTTPException(
+                status_code=400,
+                detail="Text too long. Maximum length is 10,000 characters.",
+            )
+
+        # Perform analysis
+        result = analyze_text_entropy(request.text)
+        return EntropyResponse(**result)
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error")
