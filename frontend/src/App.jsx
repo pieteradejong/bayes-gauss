@@ -7,6 +7,13 @@ function App() {
   const [plotData, setPlotData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Text entropy calculator state
+  const [entropyText, setEntropyText] = useState("");
+  const [entropyResult, setEntropyResult] = useState(null);
+  const [isCalculatingEntropy, setIsCalculatingEntropy] = useState(false);
+  const [entropyError, setEntropyError] = useState("");
 
   useEffect(() => {
     const handleResize = () => {
@@ -19,10 +26,15 @@ function App() {
 
   const handlePredict = async () => {
     if (points.length === 0) {
-      alert("Please add at least one point before predicting.");
+      setErrorMessage(
+        "Please add at least one point before generating predictions.",
+      );
+      // Clear error message after 5 seconds
+      setTimeout(() => setErrorMessage(""), 5000);
       return;
     }
 
+    setErrorMessage(""); // Clear any existing error message
     setIsLoading(true);
     try {
       const response = await fetch("http://127.0.0.1:8000/predict", {
@@ -30,13 +42,55 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ points }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
       setPlotData(data);
     } catch (error) {
       console.error("Error during prediction:", error);
-      alert("Failed to generate predictions. Please check your connection.");
+      setErrorMessage(
+        "Failed to generate predictions. Please check your connection and try again.",
+      );
+      // Clear error message after 8 seconds for network errors
+      setTimeout(() => setErrorMessage(""), 8000);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCalculateEntropy = async () => {
+    if (!entropyText.trim()) {
+      setEntropyError("Please enter some text to analyze.");
+      setTimeout(() => setEntropyError(""), 5000);
+      return;
+    }
+
+    setEntropyError(""); // Clear any existing error
+    setIsCalculatingEntropy(true);
+    try {
+      const response = await fetch("http://127.0.0.1:8000/text/entropy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: entropyText }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setEntropyResult(data);
+    } catch (error) {
+      console.error("Error calculating entropy:", error);
+      setEntropyError(
+        "Failed to calculate entropy. Please check your connection and try again.",
+      );
+      setTimeout(() => setEntropyError(""), 8000);
+    } finally {
+      setIsCalculatingEntropy(false);
     }
   };
 
@@ -81,6 +135,21 @@ function App() {
     minWidth: isMobile ? "100px" : "120px",
     transition: "background-color 0.3s ease",
     width: isMobile ? "100%" : "auto",
+  };
+
+  const errorMessageStyle = {
+    backgroundColor: "#f8d7da",
+    color: "#721c24",
+    border: "1px solid #f5c6cb",
+    borderRadius: "6px",
+    padding: isMobile ? "10px 12px" : "12px 16px",
+    marginTop: "1rem",
+    fontSize: isMobile ? "13px" : "14px",
+    fontWeight: "500",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    animation: "slideIn 0.3s ease-out",
   };
 
   const visualizationSectionStyle = {
@@ -138,6 +207,122 @@ function App() {
           >
             {isLoading ? "Predicting..." : "Generate Predictions"}
           </button>
+
+          {/* Error Message */}
+          {errorMessage && (
+            <div style={errorMessageStyle}>
+              <span>⚠️</span>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Text Entropy Calculator Section */}
+      <div style={inputSectionStyle}>
+        <h3
+          style={{
+            marginTop: 0,
+            marginBottom: "1.5rem",
+            color: "#495057",
+            textAlign: "center",
+            fontSize: isMobile ? "1.1rem" : "1.3rem",
+          }}
+        >
+          Text Entropy Calculator
+        </h3>
+
+        <div style={{ marginBottom: "1rem" }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "0.5rem",
+              color: "#555",
+              fontWeight: "600",
+              fontSize: isMobile ? "14px" : "16px",
+            }}
+          >
+            Enter text to analyze:
+          </label>
+          <textarea
+            value={entropyText}
+            onChange={(e) => setEntropyText(e.target.value)}
+            placeholder="Type or paste your text here..."
+            style={{
+              width: "100%",
+              minHeight: isMobile ? "100px" : "120px",
+              padding: "12px",
+              border: "1px solid #ccc",
+              borderRadius: "6px",
+              fontSize: isMobile ? "14px" : "16px",
+              fontFamily: "inherit",
+              resize: "vertical",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        <div style={{ textAlign: "center" }}>
+          <button
+            onClick={handleCalculateEntropy}
+            disabled={isCalculatingEntropy}
+            style={{
+              ...predictButtonStyle,
+              backgroundColor: isCalculatingEntropy ? "#6c757d" : "#28a745",
+            }}
+            onMouseOver={(e) => {
+              if (!isCalculatingEntropy)
+                e.target.style.backgroundColor = "#218838";
+            }}
+            onMouseOut={(e) => {
+              if (!isCalculatingEntropy)
+                e.target.style.backgroundColor = "#28a745";
+            }}
+          >
+            {isCalculatingEntropy ? "Calculating..." : "Calculate Entropy"}
+          </button>
+
+          {/* Entropy Error Message */}
+          {entropyError && (
+            <div style={errorMessageStyle}>
+              <span>⚠️</span>
+              <span>{entropyError}</span>
+            </div>
+          )}
+
+          {/* Entropy Result */}
+          {entropyResult && (
+            <div
+              style={{
+                marginTop: "1.5rem",
+                padding: "1rem",
+                backgroundColor: "#d4edda",
+                border: "1px solid #c3e6cb",
+                borderRadius: "6px",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: isMobile ? "1.2rem" : "1.5rem",
+                  fontWeight: "600",
+                  color: "#155724",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                Entropy: {entropyResult.entropy} bits
+              </div>
+              <div
+                style={{
+                  fontSize: isMobile ? "12px" : "14px",
+                  color: "#155724",
+                }}
+              >
+                Text length: {entropyResult.text_length} characters | Unique
+                characters: {entropyResult.unique_characters}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
