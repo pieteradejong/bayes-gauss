@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Plot from "react-plotly.js";
 import PointInputTable from "./PointInputTable";
+import { InlineMath, BlockMath } from "react-katex";
+import "katex/dist/katex.min.css";
 
 function App() {
   const [points, setPoints] = useState([]);
@@ -231,6 +233,37 @@ function App() {
         >
           Text Entropy Calculator
         </h3>
+
+        {/* Formula Explanation Box */}
+        <div
+          style={{
+            backgroundColor: "#e3f2fd",
+            border: "1px solid #bbdefb",
+            borderRadius: "8px",
+            padding: isMobile ? "1rem" : "1.25rem",
+            marginBottom: "1.5rem",
+            fontSize: isMobile ? "13px" : "14px",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "600",
+              color: "#1565c0",
+              marginBottom: "0.5rem",
+              fontSize: isMobile ? "14px" : "16px",
+            }}
+          >
+            📊 Shannon Entropy Formula
+          </div>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <BlockMath math="H(X) = -\sum_{i=1}^{n} p_i \log_2(p_i)" />
+          </div>
+          <div style={{ color: "#424242", lineHeight: "1.4" }}>
+            Where <InlineMath math="p_i" /> is the probability of character{" "}
+            <InlineMath math="i" /> appearing in the text. Higher entropy means
+            more randomness or unpredictability in the text.
+          </div>
+        </div>
 
         <div style={{ marginBottom: "1rem" }}>
           <label
