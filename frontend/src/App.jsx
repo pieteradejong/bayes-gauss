@@ -18,8 +18,62 @@ function App() {
   const [isCalculatingEntropy, setIsCalculatingEntropy] = useState(false);
   const [entropyError, setEntropyError] = useState("");
 
+  // Cross entropy calculator state
+  const [crossEntropyTextA, setCrossEntropyTextA] = useState("");
+  const [crossEntropyTextB, setCrossEntropyTextB] = useState("");
+  const [crossEntropyResult, setCrossEntropyResult] = useState(null);
+
   // Debounce ref
   const debounceRef = useRef();
+
+  // Frontend-only entropy calculation functions
+  const calculateCharacterFrequency = (text) => {
+    const freq = {};
+    for (const char of text) {
+      freq[char] = (freq[char] || 0) + 1;
+    }
+    return freq;
+  };
+
+  const calculateShannonEntropy = (text) => {
+    if (!text.trim()) return 0;
+    const freq = calculateCharacterFrequency(text);
+    const len = text.length;
+    let entropy = 0;
+    for (const count of Object.values(freq)) {
+      const prob = count / len;
+      if (prob > 0) {
+        entropy -= prob * Math.log2(prob);
+      }
+    }
+    return entropy;
+  };
+
+  const calculateCrossEntropy = (textA, textB) => {
+    if (!textA.trim() || !textB.trim()) return null;
+
+    const freqA = calculateCharacterFrequency(textA);
+    const freqB = calculateCharacterFrequency(textB);
+    const lenA = textA.length;
+    const lenB = textB.length;
+
+    let crossEntropy = 0;
+    for (const [char, countB] of Object.entries(freqB)) {
+      const probB = countB / lenB;
+      const probA = (freqA[char] || 0) / lenA;
+      if (probA > 0 && probB > 0) {
+        crossEntropy -= probB * Math.log2(probA);
+      }
+    }
+    return crossEntropy;
+  };
+
+  const calculateKLDivergence = (textA, textB) => {
+    const entropyA = calculateShannonEntropy(textA);
+    const crossEntropy = calculateCrossEntropy(textA, textB);
+    if (crossEntropy === null) return null;
+    return crossEntropy - entropyA;
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -30,6 +84,7 @@ function App() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Live update entropy when text changes (debounced)
   useEffect(() => {
     if (!entropyText.trim()) {
       setEntropyResult(null);
@@ -39,11 +94,54 @@ function App() {
     setIsCalculatingEntropy(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      handleCalculateEntropy(true); // true = silent (no error popups)
+      // Use frontend calculation instead of API call
+      const entropy = calculateShannonEntropy(entropyText);
+      const charFreq = calculateCharacterFrequency(entropyText);
+      setEntropyResult({
+        text: entropyText,
+        entropy: Math.round(entropy * 10000) / 10000,
+        character_frequency: charFreq,
+        text_length: entropyText.length,
+        unique_characters: Object.keys(charFreq).length,
+        analysis_timestamp: new Date().toISOString(),
+      });
+      setIsCalculatingEntropy(false);
     }, 400);
     return () => clearTimeout(debounceRef.current);
     // eslint-disable-next-line
   }, [entropyText]);
+
+  // Live update cross entropy when either text changes
+  useEffect(() => {
+    if (!crossEntropyTextA.trim() || !crossEntropyTextB.trim()) {
+      setCrossEntropyResult(null);
+      return;
+    }
+
+    const entropyA = calculateShannonEntropy(crossEntropyTextA);
+    const entropyB = calculateShannonEntropy(crossEntropyTextB);
+    const crossEntropy = calculateCrossEntropy(
+      crossEntropyTextA,
+      crossEntropyTextB,
+    );
+    const klDivergence = calculateKLDivergence(
+      crossEntropyTextA,
+      crossEntropyTextB,
+    );
+
+    setCrossEntropyResult({
+      entropyA: Math.round(entropyA * 10000) / 10000,
+      entropyB: Math.round(entropyB * 10000) / 10000,
+      crossEntropy: Math.round(crossEntropy * 10000) / 10000,
+      klDivergence: Math.round(klDivergence * 10000) / 10000,
+      textALength: crossEntropyTextA.length,
+      textBLength: crossEntropyTextB.length,
+      uniqueCharsA: Object.keys(calculateCharacterFrequency(crossEntropyTextA))
+        .length,
+      uniqueCharsB: Object.keys(calculateCharacterFrequency(crossEntropyTextB))
+        .length,
+    });
+  }, [crossEntropyTextA, crossEntropyTextB]);
 
   const handlePredict = async () => {
     if (points.length === 0) {
@@ -397,6 +495,252 @@ function App() {
             </div>
           )}
         </div>
+      </div>
+
+      <hr style={dividerStyle} />
+
+      {/* Cross Entropy Calculator Section */}
+      <div style={inputSectionStyle}>
+        <h3
+          style={{
+            marginTop: 0,
+            marginBottom: "1.5rem",
+            color: "#495057",
+            textAlign: "center",
+            fontSize: isMobile ? "1.1rem" : "1.3rem",
+          }}
+        >
+          Cross Entropy Calculator
+        </h3>
+
+        {/* Cross Entropy Formula Explanation */}
+        <div
+          style={{
+            backgroundColor: "#fff3cd",
+            border: "1px solid #ffeaa7",
+            borderRadius: "8px",
+            padding: isMobile ? "1rem" : "1.25rem",
+            marginBottom: "1.5rem",
+            fontSize: isMobile ? "13px" : "14px",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "600",
+              color: "#856404",
+              marginBottom: "0.5rem",
+              fontSize: isMobile ? "14px" : "16px",
+            }}
+          >
+            🔄 Cross Entropy Formula
+          </div>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <BlockMath math="H(P, Q) = -\sum_{i} Q(i) \log_2 P(i)" />
+          </div>
+          <div style={{ color: "#424242", lineHeight: "1.4" }}>
+            Where <InlineMath math="P(i)" /> is the probability of character{" "}
+            <InlineMath math="i" /> in Text A, and <InlineMath math="Q(i)" /> is
+            the probability in Text B. Lower values indicate more similar
+            distributions.
+          </div>
+        </div>
+
+        {/* Two Text Input Areas */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: "1.5rem",
+            marginBottom: "1.5rem",
+          }}
+        >
+          {/* Text A */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                color: "#555",
+                fontWeight: "600",
+                fontSize: isMobile ? "14px" : "16px",
+              }}
+            >
+              Text A:
+            </label>
+            <textarea
+              value={crossEntropyTextA}
+              onChange={(e) => setCrossEntropyTextA(e.target.value)}
+              placeholder="Enter first text..."
+              style={{
+                width: "100%",
+                minHeight: isMobile ? "100px" : "120px",
+                padding: "12px",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+                fontSize: isMobile ? "14px" : "16px",
+                fontFamily: "inherit",
+                resize: "vertical",
+                boxSizing: "border-box",
+              }}
+            />
+            <div
+              style={{
+                marginTop: "0.5rem",
+                color: "#555",
+                fontSize: isMobile ? "12px" : "13px",
+                fontWeight: "500",
+              }}
+            >
+              Characters: {crossEntropyTextA.length}
+            </div>
+          </div>
+
+          {/* Text B */}
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "0.5rem",
+                color: "#555",
+                fontWeight: "600",
+                fontSize: isMobile ? "14px" : "16px",
+              }}
+            >
+              Text B:
+            </label>
+            <textarea
+              value={crossEntropyTextB}
+              onChange={(e) => setCrossEntropyTextB(e.target.value)}
+              placeholder="Enter second text..."
+              style={{
+                width: "100%",
+                minHeight: isMobile ? "100px" : "120px",
+                padding: "12px",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+                fontSize: isMobile ? "14px" : "16px",
+                fontFamily: "inherit",
+                resize: "vertical",
+                boxSizing: "border-box",
+              }}
+            />
+            <div
+              style={{
+                marginTop: "0.5rem",
+                color: "#555",
+                fontSize: isMobile ? "12px" : "13px",
+                fontWeight: "500",
+              }}
+            >
+              Characters: {crossEntropyTextB.length}
+            </div>
+          </div>
+        </div>
+
+        {/* Cross Entropy Results */}
+        {crossEntropyResult && (
+          <div
+            style={{
+              marginTop: "1.5rem",
+              padding: "1rem",
+              backgroundColor: "#e8f5e8",
+              border: "1px solid #c8e6c9",
+              borderRadius: "6px",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                gap: "1rem",
+                marginBottom: "1rem",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: isMobile ? "1rem" : "1.2rem",
+                    fontWeight: "600",
+                    color: "#2e7d32",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Text A Entropy: {crossEntropyResult.entropyA} bits
+                </div>
+                <div
+                  style={{
+                    fontSize: isMobile ? "11px" : "12px",
+                    color: "#2e7d32",
+                  }}
+                >
+                  {crossEntropyResult.textALength} chars,{" "}
+                  {crossEntropyResult.uniqueCharsA} unique
+                </div>
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    fontSize: isMobile ? "1rem" : "1.2rem",
+                    fontWeight: "600",
+                    color: "#2e7d32",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  Text B Entropy: {crossEntropyResult.entropyB} bits
+                </div>
+                <div
+                  style={{
+                    fontSize: isMobile ? "11px" : "12px",
+                    color: "#2e7d32",
+                  }}
+                >
+                  {crossEntropyResult.textBLength} chars,{" "}
+                  {crossEntropyResult.uniqueCharsB} unique
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                borderTop: "1px solid #c8e6c9",
+                paddingTop: "1rem",
+                marginTop: "1rem",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: isMobile ? "1.1rem" : "1.3rem",
+                  fontWeight: "600",
+                  color: "#1b5e20",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                Cross Entropy: {crossEntropyResult.crossEntropy} bits
+              </div>
+              <div
+                style={{
+                  fontSize: isMobile ? "1rem" : "1.1rem",
+                  fontWeight: "600",
+                  color: "#388e3c",
+                  marginBottom: "0.25rem",
+                }}
+              >
+                KL Divergence: {crossEntropyResult.klDivergence} bits
+              </div>
+              <div
+                style={{
+                  fontSize: isMobile ? "11px" : "12px",
+                  color: "#2e7d32",
+                  fontStyle: "italic",
+                }}
+              >
+                Lower cross entropy = more similar character distributions
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <hr style={dividerStyle} />
