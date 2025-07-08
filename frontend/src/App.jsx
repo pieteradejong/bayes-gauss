@@ -3,6 +3,7 @@ import Plot from "react-plotly.js";
 import PointInputTable from "./PointInputTable";
 import { InlineMath, BlockMath } from "react-katex";
 import "katex/dist/katex.min.css";
+import { useRef } from "react";
 
 function App() {
   const [points, setPoints] = useState([]);
@@ -17,6 +18,9 @@ function App() {
   const [isCalculatingEntropy, setIsCalculatingEntropy] = useState(false);
   const [entropyError, setEntropyError] = useState("");
 
+  // Debounce ref
+  const debounceRef = useRef();
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
@@ -25,6 +29,21 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!entropyText.trim()) {
+      setEntropyResult(null);
+      setIsCalculatingEntropy(false);
+      return;
+    }
+    setIsCalculatingEntropy(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleCalculateEntropy(true); // true = silent (no error popups)
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+    // eslint-disable-next-line
+  }, [entropyText]);
 
   const handlePredict = async () => {
     if (points.length === 0) {
@@ -63,14 +82,18 @@ function App() {
     }
   };
 
-  const handleCalculateEntropy = async () => {
+  // Modified handler to support silent mode
+  const handleCalculateEntropy = async (silent = false) => {
     if (!entropyText.trim()) {
-      setEntropyError("Please enter some text to analyze.");
-      setTimeout(() => setEntropyError(""), 5000);
+      if (!silent) {
+        setEntropyError("Please enter some text to analyze.");
+        setTimeout(() => setEntropyError(""), 5000);
+      }
+      setEntropyResult(null);
+      setIsCalculatingEntropy(false);
       return;
     }
-
-    setEntropyError(""); // Clear any existing error
+    if (!silent) setEntropyError("");
     setIsCalculatingEntropy(true);
     try {
       const response = await fetch("http://127.0.0.1:8000/text/entropy", {
@@ -78,19 +101,19 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: entropyText }),
       });
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
       const data = await response.json();
       setEntropyResult(data);
     } catch (error) {
       console.error("Error calculating entropy:", error);
-      setEntropyError(
-        "Failed to calculate entropy. Please check your connection and try again.",
-      );
-      setTimeout(() => setEntropyError(""), 8000);
+      if (!silent) {
+        setEntropyError(
+          "Failed to calculate entropy. Please check your connection and try again.",
+        );
+        setTimeout(() => setEntropyError(""), 8000);
+      }
     } finally {
       setIsCalculatingEntropy(false);
     }
@@ -297,7 +320,7 @@ function App() {
 
         <div style={{ textAlign: "center" }}>
           <button
-            onClick={handleCalculateEntropy}
+            onClick={() => handleCalculateEntropy(false)}
             disabled={isCalculatingEntropy}
             style={{
               ...predictButtonStyle,
@@ -314,6 +337,18 @@ function App() {
           >
             {isCalculatingEntropy ? "Calculating..." : "Calculate Entropy"}
           </button>
+
+          {/* Character Count */}
+          <div
+            style={{
+              marginTop: "0.75rem",
+              color: entropyText.length > 10000 ? "#c0392b" : "#555",
+              fontSize: isMobile ? "13px" : "14px",
+              fontWeight: "500",
+            }}
+          >
+            Character count: {entropyText.length}
+          </div>
 
           {/* Entropy Error Message */}
           {entropyError && (
@@ -344,6 +379,11 @@ function App() {
                 }}
               >
                 Entropy: {entropyResult.entropy} bits
+                {isCalculatingEntropy && (
+                  <span style={{ marginLeft: "0.5rem", fontSize: "1rem" }}>
+                    ⏳
+                  </span>
+                )}
               </div>
               <div
                 style={{
