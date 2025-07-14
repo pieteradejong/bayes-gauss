@@ -23,6 +23,10 @@ function App() {
   const [crossEntropyTextB, setCrossEntropyTextB] = useState("");
   const [crossEntropyResult, setCrossEntropyResult] = useState(null);
 
+  // Probability simplex visualization state
+  const [simplexData, setSimplexData] = useState(null);
+  const [selectedSimplexPoint, setSelectedSimplexPoint] = useState(null);
+
   // Debounce ref
   const debounceRef = useRef();
 
@@ -75,6 +79,89 @@ function App() {
     return crossEntropy - entropyA;
   };
 
+  // Probability simplex functions
+  const calculateSimplexData = (text) => {
+    if (!text.trim()) return null;
+
+    const freq = calculateCharacterFrequency(text);
+    const total = text.length;
+
+    // Get top 3 characters for 3D simplex
+    const sortedChars = Object.entries(freq)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3);
+
+    if (sortedChars.length < 3) {
+      // Pad with zeros if less than 3 characters
+      while (sortedChars.length < 3) {
+        sortedChars.push(["", 0]);
+      }
+    }
+
+    const [char1, count1] = sortedChars[0];
+    const [char2, count2] = sortedChars[1];
+    const [char3, count3] = sortedChars[2];
+
+    const p1 = count1 / total;
+    const p2 = count2 / total;
+    const p3 = count3 / total;
+
+    // Convert to 3D coordinates (equilateral triangle)
+    const x = p1;
+    const y = p2;
+    const z = p3;
+
+    return {
+      coordinates: [x, y, z],
+      probabilities: [p1, p2, p3],
+      characters: [char1, char2, char3],
+      entropy: calculateShannonEntropy(text),
+      text: text,
+    };
+  };
+
+  const generateSimplexGrid = () => {
+    const grid = [];
+    const step = 0.1;
+
+    for (let p1 = 0; p1 <= 1; p1 += step) {
+      for (let p2 = 0; p2 <= 1 - p1; p2 += step) {
+        const p3 = 1 - p1 - p2;
+        if (p3 >= 0) {
+          const entropy = calculateEntropyFromProbabilities([p1, p2, p3]);
+          grid.push({
+            x: p1,
+            y: p2,
+            z: p3,
+            entropy: entropy,
+            color: getEntropyColor(entropy),
+          });
+        }
+      }
+    }
+
+    return grid;
+  };
+
+  const calculateEntropyFromProbabilities = (probs) => {
+    let entropy = 0;
+    for (const p of probs) {
+      if (p > 0) {
+        entropy -= p * Math.log2(p);
+      }
+    }
+    return entropy;
+  };
+
+  const getEntropyColor = (entropy) => {
+    // Color scale from blue (low entropy) to red (high entropy)
+    const maxEntropy = Math.log2(3); // Maximum entropy for 3 symbols
+    const ratio = entropy / maxEntropy;
+    const r = Math.round(255 * ratio);
+    const b = Math.round(255 * (1 - ratio));
+    return `rgb(${r}, 100, ${b})`;
+  };
+
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
@@ -89,6 +176,7 @@ function App() {
     if (!entropyText.trim()) {
       setEntropyResult(null);
       setIsCalculatingEntropy(false);
+      setSimplexData(null);
       return;
     }
     setIsCalculatingEntropy(true);
@@ -105,6 +193,11 @@ function App() {
         unique_characters: Object.keys(charFreq).length,
         analysis_timestamp: new Date().toISOString(),
       });
+
+      // Update simplex data
+      const simplex = calculateSimplexData(entropyText);
+      setSimplexData(simplex);
+
       setIsCalculatingEntropy(false);
     }, 400);
     return () => clearTimeout(debounceRef.current);
@@ -742,6 +835,189 @@ function App() {
           </div>
         )}
       </div>
+
+      <hr style={dividerStyle} />
+
+      {/* Probability Simplex Visualization Section */}
+      {simplexData && (
+        <div style={inputSectionStyle}>
+          <h3
+            style={{
+              marginTop: 0,
+              marginBottom: "1.5rem",
+              color: "#495057",
+              textAlign: "center",
+              fontSize: isMobile ? "1.1rem" : "1.3rem",
+            }}
+          >
+            📐 Probability Simplex Visualization
+          </h3>
+
+          {/* Simplex Explanation */}
+          <div
+            style={{
+              backgroundColor: "#f0f8ff",
+              border: "1px solid #b3d9ff",
+              borderRadius: "8px",
+              padding: isMobile ? "1rem" : "1.25rem",
+              marginBottom: "1.5rem",
+              fontSize: isMobile ? "13px" : "14px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "600",
+                color: "#0066cc",
+                marginBottom: "0.5rem",
+                fontSize: isMobile ? "14px" : "16px",
+              }}
+            >
+              🎯 Information Geometry
+            </div>
+            <div style={{ color: "#424242", lineHeight: "1.4" }}>
+              This 3D triangle shows the probability space of your text's top 3
+              characters. Each vertex represents a pure distribution (100% one
+              character), while interior points represent mixed distributions.
+              The color indicates entropy level.
+            </div>
+          </div>
+
+          {/* Simplex Plot */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <Plot
+              data={[
+                // Simplex boundary (triangle)
+                {
+                  x: [0, 1, 0, 0],
+                  y: [0, 0, 1, 0],
+                  z: [0, 0, 0, 0],
+                  type: "scatter3d",
+                  mode: "lines",
+                  line: { color: "#333", width: 3 },
+                  name: "Simplex Boundary",
+                  showlegend: false,
+                },
+                // Current text point
+                {
+                  x: [simplexData.coordinates[0]],
+                  y: [simplexData.coordinates[1]],
+                  z: [simplexData.coordinates[2]],
+                  type: "scatter3d",
+                  mode: "markers",
+                  marker: {
+                    size: 8,
+                    color: getEntropyColor(simplexData.entropy),
+                    symbol: "diamond",
+                  },
+                  name: "Your Text",
+                  text: [`Entropy: ${simplexData.entropy.toFixed(3)} bits`],
+                  hovertemplate:
+                    "<b>Your Text</b><br>" +
+                    "Character 1: " +
+                    simplexData.characters[0] +
+                    " (" +
+                    (simplexData.probabilities[0] * 100).toFixed(1) +
+                    "%)<br>" +
+                    "Character 2: " +
+                    simplexData.characters[1] +
+                    " (" +
+                    (simplexData.probabilities[1] * 100).toFixed(1) +
+                    "%)<br>" +
+                    "Character 3: " +
+                    simplexData.characters[2] +
+                    " (" +
+                    (simplexData.probabilities[2] * 100).toFixed(1) +
+                    "%)<br>" +
+                    "Entropy: %{text}<extra></extra>",
+                },
+              ]}
+              layout={{
+                title: {
+                  text: "Probability Simplex (Top 3 Characters)",
+                  font: { size: isMobile ? 14 : 16, color: "#495057" },
+                },
+                scene: {
+                  xaxis: {
+                    title: simplexData.characters[0] || "Char 1",
+                    range: [0, 1],
+                    titlefont: { size: isMobile ? 10 : 12 },
+                  },
+                  yaxis: {
+                    title: simplexData.characters[1] || "Char 2",
+                    range: [0, 1],
+                    titlefont: { size: isMobile ? 10 : 12 },
+                  },
+                  zaxis: {
+                    title: simplexData.characters[2] || "Char 3",
+                    range: [0, 1],
+                    titlefont: { size: isMobile ? 10 : 12 },
+                  },
+                  camera: {
+                    eye: { x: 1.5, y: 1.5, z: 1.5 },
+                  },
+                },
+                margin: isMobile
+                  ? { l: 10, r: 10, t: 30, b: 10 }
+                  : { l: 0, r: 0, t: 50, b: 0 },
+                font: { size: isMobile ? 10 : 12 },
+                height: isMobile ? 350 : 500,
+              }}
+              style={{ width: "100%" }}
+              useResizeHandler={true}
+              config={{
+                responsive: true,
+                displayModeBar: !isMobile,
+                displaylogo: false,
+                modeBarButtonsToRemove: ["pan2d", "lasso2d", "select2d"],
+                scrollZoom: !isMobile,
+                doubleClick: "reset+autosize",
+              }}
+            />
+          </div>
+
+          {/* Simplex Statistics */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+              gap: "1rem",
+              marginTop: "1rem",
+            }}
+          >
+            {simplexData.characters.map((char, index) => (
+              <div
+                key={index}
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  padding: "1rem",
+                  borderRadius: "6px",
+                  textAlign: "center",
+                  border: "1px solid #e9ecef",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: isMobile ? "1.2rem" : "1.5rem",
+                    fontWeight: "600",
+                    color: "#495057",
+                    marginBottom: "0.25rem",
+                  }}
+                >
+                  {char || "N/A"}
+                </div>
+                <div
+                  style={{
+                    fontSize: isMobile ? "12px" : "14px",
+                    color: "#6c757d",
+                  }}
+                >
+                  {(simplexData.probabilities[index] * 100).toFixed(1)}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <hr style={dividerStyle} />
 
